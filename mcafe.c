@@ -1,83 +1,72 @@
 #include <stdio.h>
 #include <stdlib.h>
+#include <unistd.h>
+#include "fsm.h"
 
 /* entradas */
 int boton = 0;
-int dinero = 0;
 int timer = 0;
+int moneda = 0;
 
 /* salidas */
 int vaso = 0;
 int cafe = 0;
 int leche = 0;
 int cobrar = 0;
+
+/* recursos compartidos */
+int dinero = 0;
 int devolver = 0;
-
-struct fsm_trans_t {
-  int orig;
-  int (*inputs) (void);
-  int dest;
-  void (*outputs) (void);
-};
-typedef struct fsm_trans_t fsm_trans_t;
-
-struct fsm_t {
-  fsm_trans_t* tt;
-  int current;
-};
-typedef struct fsm_t fsm_t;
-
-void
-fsm_init (fsm_t* this, fsm_trans_t* tt)
-{
-  this->tt = tt;
-  this->current = tt[0].orig;
-}
-
-fsm_t*
-fsm_new (fsm_trans_t* tt)
-{
-  fsm_t* this = (fsm_t*) malloc (sizeof (fsm_t));
-  fsm_init (this, tt);
-  return this;
-}
-
-void
-fsm_fire (fsm_t* this)
-{
-}
 
 enum estado_t {
   ESPERANDO,
-  SERVIRCAFE
+  VASO,
+  CAFE,
+  LECHE
 };
 
-int
-boton_pulsado () 
-{
-  return boton && (dinero >= 50);
-}
+#define T_VASO 1
+#define T_CAFE 2
+#define T_LECHE 2
 
-void
-esperando_to_servircafe (void)
-{
-  boton = 0;
-  cafe = 1;
-  cobrar = 1;
-}
+void start_timer (int t) { timer = t; }
+
+int boton_pulsado () { return boton && (dinero >= 50); }
+int timer_terminado () { return timer == 0; }
+int hay_moneda () { return moneda > 0; }
+int devolver_pulsado () { return devolver; }
+
+void sacar_vaso () { dinero -= 50; vaso = 1; start_timer(T_VASO); }
+void echar_cafe () { vaso = 0; cafe=1; start_timer(T_CAFE); }
+void echar_leche () { cafe = 0; leche = 1; start_timer(T_LECHE); }
+void terminar_cafe () { leche = 0; devolver = 1; }
+void sumar_dinero () { dinero += moneda; moneda = 0; }
+void devolver_dinero () { dinero = 0; }
 
 int 
 main ()
 {
-  fsm_trans_t tt[] = {
-    { ESPERANDO, boton_pulsado, SERVIRCAFE, esperando_to_servircafe },
+  fsm_trans_t tt_mcafe[] = {
+    { ESPERANDO, boton_pulsado, VASO, sacar_vaso },
+    { VASO, timer_terminado, CAFE, echar_cafe },
+    { CAFE, timer_terminado, LECHE, echar_leche },
+    { LECHE, timer_terminado, ESPERANDO, terminar_cafe },
     { -1, 0, -1, 0 }
   };
-  fsm_t *fsm = fsm_new (tt);
+  fsm_trans_t tt_monedero[] = {
+    { ESPERANDO, hay_moneda, ESPERANDO, sumar_dinero },
+    { ESPERANDO, devolver_pulsado, ESPERANDO, devolver_dinero },
+    { -1, 0, -1, 0 }
+  };
+  fsm_t *fsm_mcafe = fsm_new (tt_mcafe);
+  fsm_t *fsm_monedero = fsm_new (tt_monedero);
 
-  while (scanf("%d %d %d", &boton, &dinero, &timer) == 3) {
-    fsm_fire (fsm);
-    printf ("%d %d %d %d %d\n", vaso, cafe, leche, cobrar, devolver);
+  while (scanf("%d %d", &boton, &moneda) == 2) {
+    fsm_fire (fsm_mcafe);
+    fsm_fire (fsm_monedero);
+    printf ("%d %d %d %d\n", vaso, cafe, leche, dinero);
+    sleep (1);
+    if (timer) timer--;
   }
 
   return 0;

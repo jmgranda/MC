@@ -1,9 +1,14 @@
 CC=gcc
-CFLAGS=-Wall -Werror -ansi -pedantic -g -O
+CFLAGS=-Wall -Werror -ansi -pedantic -g -O -D'sleep(x)='
+LDLIBS=-lrt
 
-mcafe: mcafe.o
+mcafe: mcafe.o fsm.o
 
 test: mcafe
-	./mcafe < test/mcafe.input > test/mcafe.output
+	grep -v '^#' test/mcafe.input | ./mcafe > test/mcafe.output
+
+clean:
+	rm -f *.o mcafe
 
 .PHONY: test
+
